@@ -1,9 +1,9 @@
 # DeCANder
-Landrover Defender TD4 / TDCI - Arduino UNO - CAN-bus display/tool
+Landrover Defender TD4 / TDCI - Arduino UNO - CAN-bus display/tool (2,4l Machine only; MY 2007-2011)
 
 USE THIS CODE ON YOUR OWN RISK!
 
-This is a small project for creating a display for additional information from the CAN-bus of a Land Rover Defender with the Ford "TD4" / "TDCI" / "duratorq" engine. This classical 4x4 has a CAN-bus connection between the dashboard and the engine control unit (ECU).
+This is a small project for creating a display for additional information from the CAN-bus of a Land Rover Defender with the Ford "TD4" / "TDCI" / "duratorq" 2,4l engine. (MY 2007 - 2011) This classical 4x4 has a CAN-bus connection between the dashboard and the engine control unit (ECU).
 
 The primary idea is not to send messages to the CAN bus (i.e. standard OBD requests) but only to read and interpret the messages from the bus that are being sent from the car's own instances. These messages are not documented whatsoever. Thus, this information has to be reverse-engineered for the CAN-bus traffic to make sense. However, most of the (interesting) data already could be recognized - some other data still is a mystery. =) So if you also like to reverse-engineer some of the not-yet-known values then you should try DeCANder version 1 from the master branch which was uploaded 2019-04-27 on github.
 

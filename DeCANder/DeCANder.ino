@@ -7,7 +7,7 @@
  */
  
 // constants
-#define DeCANderVer "2.4"
+#define DeCANderVer "2.4a"                                  // + bugfix "Starts", avgMax 2020-06-04 (also re-set avgMax 2020-07-03)
 #define modes 5                                             // number of available display modes; 9 MAX for now - see bottom lines
 #define hotWarn 100                                         // We want to warn at this temperature.
                                                             // Defender emergency program kicks in at 111°C ...?
@@ -76,10 +76,10 @@ float avgMinTank = 50;                                      // minimal fuel cons
 
 // EEprom misc values (300's)
 int startCount = 0;                                         // motor start counter
-float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)
-float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)
-float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)
-float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)
+float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
+float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
+float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)  = alltime driven km
+float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)    = alltime consumed fuel
 
 // Libraries
 #include <LiquidCrystal.h>                                  // "LCD-keypad-shield from D1 Robot" using a 2x16 Hitachi HD44780 display
@@ -221,6 +221,7 @@ void EEread(){                                              // tuts EEPROM.get a
 void EEwrite() {                                            // only write to EEPROM if values have changed
   if (avg < avgMin) { avgMin = avg; EEPROM.put(200,avgMin); }
   if (avg > avgMax) { avgMax = avg; EEPROM.put(160,avgMax); }
+  if (not(avgMax < 50)) { EEPROM.put(160,10); }             // Just in case avgMax runs "inf"...
   if (avg < avgMinTank) { avgMinTank = avg; EEPROM.put(260,avgMinTank); }
   EEPROM.get(100,EE_FLOAT);
   if (spdMax > EE_FLOAT) { EEPROM.put(100,spdMax); }
@@ -382,7 +383,7 @@ void showMode1() {                                          // startup-screen (n
   } else {
     lcd.setCursor(0,0);
     if ((tripStart == 0) or ((millis() - tripStart) < 60000)) {
-      lcd.print(" uptime=  :  :  ");
+      lcd.print(" uptime   :  :  ");
       times = millis() / 1000;
     } else {
       lcd.print("   trip=  :  :  ");
@@ -406,9 +407,9 @@ void showMode1() {                                          // startup-screen (n
     if (seconds < 10) { lcd.print("0"); }
     lcd.print(seconds);
     lcd.setCursor(0,1);
-    if (startCount == 1) { lcd.print("    start  [   ]"); } else { lcd.print("    starts [   ]"); }
+    if (startCount == 1) { lcd.print("     start [   ]"); } else { lcd.print("     starts[   ]"); }
     lcd.setCursor(0,1);
-    if (startCount < 10) { lcd.print("   "); } else if (startCount < 100) { lcd.print("  "); } else if (startCount < 1000) { lcd.print("   "); }
+    if (startCount < 10) { lcd.print("   "); } else if (startCount < 100) { lcd.print("  "); } else if (startCount < 1000) { lcd.print(" "); }
     lcd.print(startCount);
     lcd.setCursor(12,1);
     lcd.print(ign);
@@ -607,15 +608,18 @@ void showMode4() {                                          // tankstop-screen w
     lcd.setCursor(0,0);
     lcd.write(byte(3));
     lcd.setCursor(0,1);
-    lcd.print("  <   /  l     l");
-    lcd.setCursor(7,1);
+    lcd.print("  <  /  l      l");
+    lcd.setCursor(3,1);
+    EE_FLOAT = dieselTank - litersTank;
+    if (EE_FLOAT < 9.95) { lcd.print(" "); }
+    lcd.print(EE_FLOAT,0);
+    lcd.setCursor(6,1);
     lcd.print(dieselTank);
     lcd.setCursor(10,1);
     if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
     if (EE_FLOAT < 9.95) { lcd.print(" "); }
     lcd.write(byte(2));
     lcd.print(EE_FLOAT,1);
-
     lcd.setCursor(3,0);
     if (EE_FLOAT != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / EE_FLOAT; } 
     else if (litersAll != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / (100 * litersAll / kmAll); }
@@ -626,10 +630,6 @@ void showMode4() {                                          // tankstop-screen w
     if (kmTank < 10) { lcd.print("  "); } else
     if (kmTank < 100) { lcd.print(" "); }
     lcd.print(kmTank,0);
-    lcd.setCursor(3,1);
-    EE_FLOAT = dieselTank - litersTank;
-    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
-    lcd.print(EE_FLOAT,0);
   }
 }
 

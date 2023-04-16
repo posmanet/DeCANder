@@ -7,13 +7,36 @@
  */
  
 // constants
-#define DeCANderVer "2.4"
+#define DeCANderVer "2.5"
+/*
+ * bugfix "Starts"
+ * corrected dieselTank for my 110 (see comments)
+ * activated hot variable and added tooHot variable
+ * added hotMillis & tooHotMillis
+ * added hotAlert (and a second warning/alert sound)
+ * renamed lastMillis & initMillis (big letter M)
+ * rpmMaxi --> EEPROM position 140 !!
+ * revised showMode5() (show only max values now)
+ * set default rpmMax & rpmMaxi = 0
+ * revised EEdelete() - added parameter m (max data) (removed s and w)
+ * revised EEwrite()
+ * erasing all Data is in showMode2() now
+ * added character arrow[8] (sum[8] has no longer use)
+ * removed variables avgMax & avgMin & avgMinTank (no use)
+ * we do not read any min oder max valies from EEprom any more, due to having trip-values in memory
+ * revised tankstop-screen
+ */
 #define modes 5                                             // number of available display modes; 9 MAX for now - see bottom lines
+#define hotAlert 105                                        // We want to alert at this temperature.
 #define hotWarn 100                                         // We want to warn at this temperature.
                                                             // Defender emergency program kicks in at 111°C ...?
 #define notWarm 70                                          // The engine is still very cold... chillax!
-#define dieselTank 75                                       // Change this if you have messed with the original tank capacity.
-                                                            // The Defender TD4 110 has 75 liters tank! (define slightly less?)
+#define dieselTank 69                                       // Change this if you have messed with the original tank capacity.
+                                                            // Defender TD4 2,4l 110 has 73 liters tank. (see manual; section "mainenance")
+                                                            // (Defender TD4 2,4l 90 has 57 liters tank.)
+                                                            // "a minimum of 4 litres will be required to restart the engine" -> 73-4=69 !
+                                                            // "(warning Light) Illuminates when the fuel remaining in the tank drops to a minimum of 9 litres."
+                                                            // "Once the fuel level has dropped to the point where the range is approximately 80 km the low fuel warning indicator will illuminate."
 // misc variables
 int taster = 0;                                             // ADC button value from LCD-keypad-shield
 char keypressed = ' ';                                      // indicate some key still pressed and which ("" = no key pressed)
@@ -27,8 +50,10 @@ unsigned char canBuf[8];                                    // CAN
 unsigned long canID = 0;                                    // CAN
 
 // calculations helper variables
-unsigned long lastmillis = 0;                               // display refresh timer
-unsigned long initmillis = 0;                               // init / delete data timer
+unsigned long lastMillis = 0;                               // display refresh timer
+unsigned long initMillis = 0;                               // init / delete data timer
+unsigned long tooHotMillis = 0;                             // temperature alert timer
+unsigned long hotMillis = 0;                                // temperature warning timer
 unsigned long times = 0;                                    // time calculations help variable (unsigned long for millis())
 unsigned long trip = 0;                                     // trip timer
 unsigned long tripStart = 0;                                // calculate trip timer
@@ -55,7 +80,8 @@ int wat = 0;                                                // interpreted cooli
 bool ign = LOW;                                             // interpreted ignition [on/off]
 bool pre = LOW;                                             // interpreted diesel preheat [on/off]
 bool eng = LOW;                                             // interpreted engine [on/off]
-//NOP bool hot = false;                                           // alert bit for too hot cooling water (> hotWarn °C)
+bool hot = false;                                           // warn bit for too hot cooling water (> hotWarn °C)
+bool tooHot = false;                                        // alert bit for too hot cooling water (> hotAlert °C)
 float ped = 0;                                              // interpreted gas pedal percentage [%]
 float spd = 0;                                              // interpreted vehicle speed [km/h]
 float avg = 0;                                              // calculate average fuel consumption /100km (trip)
@@ -63,23 +89,20 @@ float momAvg = 0;                                           // calculate current
 unsigned long momAvgMillis = 0;                             // calculate l/h since last Display
 
 // EEprom max values (100's) -> INT~2Byte. FLOAT~4Byte
-float avgMax = 5;                                           // maximal fuel consumption /100km (after a trip)
 float spdMax = 0;                                           // interpreted vehicle speed [km/h]
 int watMax = 0;                                             // interpreted cooling water temperature [°C]
-int rpmMax = 1000;                                          // interpreted engine rpm [1/min]
+int rpmMax = 0;                                             // interpreted engine rpm [1/min]
 
 // EEprom min values (200's)
-float avgMin = 50;                                          // minimal fuel consumption /100km (after a trip)
 int watMin = 50;                                            // interpreted cooling water temperature [°C]
 int rpmMin = 1000;                                          // interpreted engine rpm [1/min]
-float avgMinTank = 50;                                      // minimal fuel consumption /100km since tank stop
 
 // EEprom misc values (300's)
 int startCount = 0;                                         // motor start counter
-float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)
-float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)
-float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)
-float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)
+float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
+float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
+float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)  = alltime driven km
+float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)    = alltime consumed fuel
 
 // Libraries
 #include <LiquidCrystal.h>                                  // "LCD-keypad-shield from D1 Robot" using a 2x16 Hitachi HD44780 display
@@ -173,21 +196,20 @@ void blingbling() {
 }
 
 void EEdelete(char what) {                                  // delete selected values (t=tankstop; s=speeds; w=water temperatures; k=ALL-values)
-  if (what == 't') {                                        // tankstop values (litersTank & kmTank)
-    EEPROM.put(340,0.0);                                    // default value litersTank (consumed)
-    EEPROM.put(320,0.0);                                    // default value kmTank
+  if (what == 't') {                                        // tankstop values
+    EEPROM.put(340,10.0);                                   // default value litersTank (consumed)
+    EEPROM.put(320,10.0);                                   // default value kmTank
     EEPROM.put(260,10.0);                                   // default value avgMinTank
-  } else if (what == 's') {                                 // speed values (spdMax & rpmMin & rpmMax)
-    EEPROM.put(100,0.0);                                    // default value spdMax
-    EEPROM.put(240,1000);                                   // default value rpmMin
-    EEPROM.put(140,3000);                                   // default value rpmMax
-  } else if (what == 'w') {                                 // water temperatures (watMin & watMax)
+  } else if (what == 'm') {                                 // maximum values
+    EEPROM.put(120,100);                                    // default value watMax
+    EEPROM.put(100,100.0);                                  // default value spdMax
+    EEPROM.put(140,1000);                                   // default value rpmMax
+    EEPROM.put(160,10.0);                                   // default value avgMax
+  } else if (what == 'r') {                                 // remaining values
     EEPROM.put(220,0);                                      // default value watMin
-    EEPROM.put(120,0);                                      // default value watMax
-  } else if (what == 'a') {                                 // alltime values (avgMin & startCount & litersAll & kmAll)
-    EEPROM.put(200,9.5);                                    // default value avgMin
-    EEPROM.put(160,11.0);                                   // default value avgMax
-    EEPROM.put(300,1);                                      // default value startCount
+    EEPROM.put(240,1000);                                   // default value rpmMin
+    EEPROM.put(200,10.0);                                   // default value avgMin
+    EEPROM.put(300,0);                                      // default value startCount
     EEPROM.put(380,4099.8);                                 // default value litersAll (consumed)     2019-08-09
     EEPROM.put(360,40306.0);                                // default value kmAll                    2019-08-09
   }
@@ -196,21 +218,12 @@ void EEdelete(char what) {                                  // delete selected v
 void EEerase() {                                            // erase eeprom and fill in default values
   for(int i = 0; i < EEPROM.length(); i++) { EEPROM.write(i,0); }
   EEdelete('t');
-  EEdelete('s');
-  EEdelete('w');
-  EEdelete('a');
+  EEdelete('m');
+  EEdelete('r');
   EEread();
 }
 
 void EEread(){                                              // tuts EEPROM.get auch mit INT? Woher weiß er, wie viele Bytes er lesen muss?
-  EEPROM.get(100,spdMax);                                   // speed max [km/h]
-//  EEPROM.get(120,watMax);                                   // water temp max [°C] -- DON'T! We want the trip's watMax value.
-//  EEPROM.get(140,rpmMax);                                   // rpm max [1/min] -- DON'T! We want the trip's rpmMax value.
-  EEPROM.get(160,avgMax);                                   // fuel consumption max [l/100km x10]
-  EEPROM.get(200,avgMin);                                   // fuel consumption min [l/100km x10]
-  EEPROM.get(220,watMin);                                   // water temp min? [°C] - potentially pointless ("coldest start" ever?)
-  EEPROM.get(240,rpmMin);                                   // rpm min? [1/min] - potentially pointless (-> Lowest rpm will be in start procedure!)
-  EEPROM.get(260,avgMinTank);                               // fuel consumption min [l/100km x10]
   EEPROM.get(300,startCount);                               // motor start counter [1]
   EEPROM.get(320,kmTank);                                   // distance since tank stop [km]
   EEPROM.get(340,litersTank);                               // fuel since tank stop [l]
@@ -219,19 +232,22 @@ void EEread(){                                              // tuts EEPROM.get a
 }
 
 void EEwrite() {                                            // only write to EEPROM if values have changed
-  if (avg < avgMin) { avgMin = avg; EEPROM.put(200,avgMin); }
-  if (avg > avgMax) { avgMax = avg; EEPROM.put(160,avgMax); }
-  if (avg < avgMinTank) { avgMinTank = avg; EEPROM.put(260,avgMinTank); }
   EEPROM.get(100,EE_FLOAT);
   if (spdMax > EE_FLOAT) { EEPROM.put(100,spdMax); }
   EEPROM.get(120,EE_INT);
   if (watMax > EE_INT) { EEPROM.put(120,watMax); }
   EEPROM.get(140,EE_INT);
   if (rpmMax > EE_INT) { EEPROM.put(140,rpmMax); }
+  EEPROM.get(160,EE_FLOAT);
+  if ((avg > EE_FLOAT) and (avg < 50)) { EEPROM.put(160,avg); }   // keep avgMax < 50 l/100km.
+  EEPROM.get(200,EE_FLOAT);
+  if ((avg < EE_FLOAT) and (avg > 0)) { EEPROM.put(200,avg); }    // keep avgMin > 0 l/100km
   EEPROM.get(220,EE_INT);
   if (watMin < EE_INT) { EEPROM.put(220,watMin); }
   EEPROM.get(240,EE_INT);
   if (rpmMin < EE_INT) { EEPROM.put(240,rpmMin); }
+  EEPROM.get(260,EE_FLOAT);
+  if ((avg < EE_FLOAT) and (avg > 0)) { EEPROM.put(260,avg); }    // keep avgMinTank > 0 l/100km
   EEPROM.get(300,EE_INT);
   if (startCount > EE_INT) { EEPROM.put(300,startCount); }
   EEPROM.get(320,EE_FLOAT);
@@ -261,7 +277,7 @@ void keysCheck() {
       lcd.clear();
       keypressed = 'l';
     } else if (taster < 884) {                                // select
-      initmillis = millis();
+      initMillis = millis();
       keypressed = 's';
     }
   } else {
@@ -351,9 +367,18 @@ void evalCAN() {
   if (canID == 297)  { ped = float((canBuf[6] - 12) * 256 + canBuf[7]) / 10; }
   if (canID == 295)  { 
     wat = canBuf[6] - 60;
-//NOP    if ((wat > hotWarn) and (hot == false)) { hot = true; } else  // set alert BIT here
-//NOP    if ((wat < hotWarn) and (hot == true)) { hot = false; }       // de-alert =)
-    if ((wat > hotWarn) and (((millis()/1000)%2)==0) and (sound == HIGH)) { tone(A1,2349,50); } // acoustic alert
+    if ((wat > hotAlert) and (tooHot == false)) { tooHot = true; tooHotMillis = millis(); } else     // set alert BIT here
+    if ((wat < hotAlert) and (tooHot == true)) { tooHot = false; tooHotMillis = 0; }                 // de-alert =)
+    if ((wat > hotWarn) and (hot == false)) { hot = true; hotMillis = millis(); } else               // set warn BIT here
+    if ((wat < hotWarn) and (hot == true)) { hot = false; hotMillis = 0; }                           // de-warn =)
+    if ((tooHot == true) and (millis() - tooHotMillis < 500)) {
+      tone(A1,2349);
+    } else if ((hot == true) and (millis() - hotMillis < 50)) {
+      tone(A1,2349);
+    } else {
+      noTone(A1);
+    }
+//old    if ((wat > hotWarn) and (((millis()/1000)%2)==0) and (sound == HIGH)) { tone(A1,2349,50); } // acoustic alert
     if ((wat < 200) and (wat > watMax)) { watMax = wat; }
     if ((wat > -30) and (wat < watMin)) { watMin = wat; }
   }
@@ -382,7 +407,7 @@ void showMode1() {                                          // startup-screen (n
   } else {
     lcd.setCursor(0,0);
     if ((tripStart == 0) or ((millis() - tripStart) < 60000)) {
-      lcd.print(" uptime=  :  :  ");
+      lcd.print(" uptime   :  :  ");
       times = millis() / 1000;
     } else {
       lcd.print("   trip=  :  :  ");
@@ -406,9 +431,9 @@ void showMode1() {                                          // startup-screen (n
     if (seconds < 10) { lcd.print("0"); }
     lcd.print(seconds);
     lcd.setCursor(0,1);
-    if (startCount == 1) { lcd.print("    start  [   ]"); } else { lcd.print("    starts [   ]"); }
+    if (startCount == 1) { lcd.print("     start [   ]"); } else { lcd.print("     starts[   ]"); }
     lcd.setCursor(0,1);
-    if (startCount < 10) { lcd.print("   "); } else if (startCount < 100) { lcd.print("  "); } else if (startCount < 1000) { lcd.print("   "); }
+    if (startCount < 10) { lcd.print("   "); } else if (startCount < 100) { lcd.print("  "); } else if (startCount < 1000) { lcd.print(" "); }
     lcd.print(startCount);
     lcd.setCursor(12,1);
     lcd.print(ign);
@@ -420,9 +445,23 @@ void showMode1() {                                          // startup-screen (n
 void showMode2() {                                          // driving-screen with current values (play-icon)
   if (keypressed == 's') {
     lcd.setCursor(0,0);
-    lcd.print("Sorry - nothing ");
+    lcd.print("Erasing ALL data");
     lcd.setCursor(0,1);
-    lcd.print("to erase here...");
+    lcd.print("in x seconds !!!");
+    if (((millis() - initMillis) < 5000) and (initMillis > 0)) {
+      lcd.setCursor(3,1);
+      lcd.print(5-((millis() - initMillis)/1000));
+    } else if (initMillis != 0) {
+      initMillis = 0;
+      lcd.setCursor(0,1);
+      lcd.print(" in progress... ");
+      EEerase();
+    } else {
+      lcd.setCursor(0,0);
+      lcd.print("ALL data erased!");
+      lcd.setCursor(0,1);
+      lcd.print("(release SELECT)");
+    }
   } else if (keypressed == 'd') {
     soundOnOff();
   } else if (keypressed == 'u') {
@@ -502,11 +541,11 @@ void showMode3() {                                          // trip-screen with 
     lcd.print("Erasing trip    ");
     lcd.setCursor(0,1);
     lcd.print("data in x sec...");
-    if (((millis() - initmillis) < 5000) and (initmillis > 0)) {
+    if (((millis() - initMillis) < 5000) and (initMillis > 0)) {
       lcd.setCursor(8,1);
-      lcd.print(5-((millis() - initmillis)/1000));
-    } else if (initmillis != 0) {
-      initmillis = 0;
+      lcd.print(5-((millis() - initMillis)/1000));
+    } else if (initMillis != 0) {
+      initMillis = 0;
       lcd.setCursor(0,1);
       lcd.print("data in progress");
       km = 0;
@@ -578,11 +617,11 @@ void showMode4() {                                          // tankstop-screen w
     lcd.print("Erasing tankstop");
     lcd.setCursor(0,1);
     lcd.print("data in x sec...");
-    if (((millis() - initmillis) < 5000) and (initmillis > 0)) {
+    if (((millis() - initMillis) < 5000) and (initMillis > 0)) {
       lcd.setCursor(8,1);
-      lcd.print(5-((millis() - initmillis)/1000));
-    } else if (initmillis != 0) {
-      initmillis = 0;
+      lcd.print(5-((millis() - initMillis)/1000));
+    } else if (initMillis != 0) {
+      initMillis = 0;
       lcd.setCursor(0,1);
       lcd.print("data in progress");
       EEdelete('t');
@@ -596,60 +635,63 @@ void showMode4() {                                          // tankstop-screen w
     soundOnOff();
   } else if (keypressed == 'u') {
     lcd.setCursor(0,0);
-    lcd.print("  range distance");
+    lcd.print("range (distance)");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
     lcd.setCursor(0,1);
     lcd.print("  diesel l/100km");
   } else {
     lcd.setCursor(0,0);
-    lcd.print("  <   km  >   km");
+    lcd.print("      km (   km)");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
     lcd.setCursor(0,1);
-    lcd.print("  <   /  l     l");
-    lcd.setCursor(7,1);
-    lcd.print(dieselTank);
-    lcd.setCursor(10,1);
-    if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
-    if (EE_FLOAT < 9.95) { lcd.print(" "); }
-    lcd.write(byte(2));
-    lcd.print(EE_FLOAT,1);
-
+    lcd.print("     /  l      l");
+    
     lcd.setCursor(3,0);
     if (EE_FLOAT != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / EE_FLOAT; } 
     else if (litersAll != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / (100 * litersAll / kmAll); }
     else { EE_FLOAT = 0; }
     if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
-    lcd.setCursor(11,0);
+    
+    lcd.setCursor(10,0);
     if (kmTank < 10) { lcd.print("  "); } else
     if (kmTank < 100) { lcd.print(" "); }
     lcd.print(kmTank,0);
+
     lcd.setCursor(3,1);
     EE_FLOAT = dieselTank - litersTank;
-    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
+    if (EE_FLOAT < 9.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
+    lcd.setCursor(6,1);
+    lcd.print(dieselTank);
+    
+    lcd.setCursor(10,1);
+    if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
+    if (EE_FLOAT < 9.95) { lcd.print(" "); }
+    lcd.write(byte(2));
+    lcd.print(EE_FLOAT,1);
   }
 }
 
-void showMode5() {                                          // all-time-screen with all-time values (sum-icon)
+void showMode5() {                                          // max-screen with all-time maximum values (arrow-icon)
   if (keypressed == 's') {
     lcd.setCursor(0,0);
-    lcd.print("Erasing ALL data");
+    lcd.print("Erasing max data");
     lcd.setCursor(0,1);
     lcd.print("in x seconds !!!");
-    if (((millis() - initmillis) < 5000) and (initmillis > 0)) {
+    if (((millis() - initMillis) < 5000) and (initMillis > 0)) {
       lcd.setCursor(3,1);
-      lcd.print(5-((millis() - initmillis)/1000));
-    } else if (initmillis != 0) {
-      initmillis = 0;
+      lcd.print(5-((millis() - initMillis)/1000));
+    } else if (initMillis != 0) {
+      initMillis = 0;
       lcd.setCursor(0,1);
       lcd.print(" in progress... ");
-      EEerase();
+      EEdelete('m');
     } else {
       lcd.setCursor(0,0);
-      lcd.print("All data erased!");
+      lcd.print("Max data erased!");
       lcd.setCursor(0,1);
       lcd.print("(release SELECT)");
     }
@@ -657,24 +699,20 @@ void showMode5() {                                          // all-time-screen w
     soundOnOff();
   } else if (keypressed == 'u') {
     lcd.setCursor(0,0);
-    lcd.print("  v_max     -min");
+    lcd.print("  v_max    r_max");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
-    lcd.setCursor(11,0);
-    lcd.write(byte(2));
     lcd.setCursor(0,1);
-    lcd.print("   _max     -max");
+    lcd.print("   _max     _max");
     lcd.setCursor(2,1);
     lcd.write(byte(1));
     lcd.setCursor(11,1);
     lcd.write(byte(2));
   } else {
     lcd.setCursor(0,0);
-    lcd.print("     km/h      l");
+    lcd.print("     km/h      r");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
-    lcd.setCursor(10,0);
-    lcd.write(byte(2));
     lcd.setCursor(0,1);
     lcd.print("      C        l");
     lcd.setCursor(5,1);
@@ -682,22 +720,28 @@ void showMode5() {                                          // all-time-screen w
     lcd.setCursor(10,1);
     lcd.write(byte(2));
     lcd.setCursor(2,0);
-    EEPROM.get(100,EE_FLOAT);
+    EEPROM.get(100,EE_FLOAT); // read v_max
     if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
     lcd.setCursor(11,0);
-    if (avgMin < 9.95) { lcd.print(" "); }
-    lcd.print(avgMin,1);
+    EEPROM.get(140,EE_INT); // read r_max
+    if (EE_INT > 9999) { lcd.print("Erpm"); } else {
+      if (EE_INT < 10) { lcd.print("   "); } else
+      if (EE_INT < 100) { lcd.print("  "); } else
+      if (EE_INT < 1000) { lcd.print(" "); }
+      lcd.print(EE_INT);
+    }
     lcd.setCursor(2,1);
-    EEPROM.get(120,EE_INT);
+    EEPROM.get(120,EE_INT); // read temp_max
     if (EE_INT > 999) { lcd.print("Ewm"); } else {
       if (EE_INT < 10) { lcd.print("  "); } else
       if (EE_INT < 100) { lcd.print(" "); }
       lcd.print(EE_INT);
     }
     lcd.setCursor(11,1);
-    if (avgMax < 9.95) { lcd.print(" "); }
-    lcd.print(avgMax,1);
+    EEPROM.get(160,EE_FLOAT); // read avg_max
+    if (EE_FLOAT < 9.95) { lcd.print(" "); }
+    lcd.print(EE_FLOAT,1);
   }
 }
 
@@ -715,12 +759,12 @@ void loop() {
     Serial.println();
     evalCAN();
   }
-  if (millis() > (lastmillis + 1000)) {
+  if (millis() > (lastMillis + 1000)) {
     if (mode == 2) { lcd.createChar(3,play); showMode2(); } else
     if (mode == 3) { lcd.createChar(3,hourglass); showMode3(); } else
     if (mode == 4) { lcd.createChar(3,tank); showMode4(); } else
-    if (mode == 5) { lcd.createChar(3,sum); showMode5(); } else 
+    if (mode == 5) { lcd.createChar(3,arrow); showMode5(); } else 
                    { mode = 1; showMode1(); }
-    lastmillis = millis();
+    lastMillis = millis();
   }
 }

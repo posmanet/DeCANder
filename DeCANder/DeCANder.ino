@@ -7,6 +7,7 @@
  */
  
 // constants
+<<<<<<< HEAD
 #define DeCANderVer "2.6"
 /* what's new on 2024-02-25:
  * accelerated bootup
@@ -14,16 +15,45 @@
  * minor display modifications in mode 1
  * bugfix tankstop-range occasionally switching to trip-km
  * display modifications in mode 4 (distance --> full range)
+=======
+#define DeCANderVer "2.5"
+/*
+ * bugfix "Starts"
+ * corrected dieselTank for my 110 (see comments)
+ * activated hot variable and added tooHot variable
+ * added hotMillis & tooHotMillis
+ * added hotAlert (and a second warning/alert sound)
+ * renamed lastMillis & initMillis (big letter M)
+ * rpmMaxi --> EEPROM position 140 !!
+ * revised showMode5() (show only max values now)
+ * set default rpmMax & rpmMaxi = 0
+ * revised EEdelete() - added parameter m (max data) (removed s and w)
+ * revised EEwrite()
+ * erasing all Data is in showMode2() now
+ * added character arrow[8] (sum[8] has no longer use)
+ * removed variables avgMax & avgMin & avgMinTank (no use)
+ * we do not read any min oder max valies from EEprom any more, due to having trip-values in memory
+ * revised tankstop-screen
+>>>>>>> refs/remotes/origin/master
  */
 #define modes 5                                             // number of available display modes; 9 MAX for now - see bottom lines
 #define hotAlert 105                                        // We want to alert at this temperature.
 #define hotWarn 100                                         // We want to warn at this temperature.
+<<<<<<< HEAD
                                                             // Defender emergency program kicks in at about 111°C ...?
 #define notWarm 70                                          // The engine is still cold... chillax!
 #define dieselTank 69                                       // Change this if you have messed with the original tank capacity.
                                                             // Defender TD4 2,4l 110 has 73 liters tank. (see manual; section "mainenance")
                                                             // (Defender TD4 2,4l 90 has 57 liters tank.)
                                                             // "a minimum of 4 litres will be required to restart the engine" -> 73-4 = 69
+=======
+                                                            // Defender emergency program kicks in at 111°C ...?
+#define notWarm 70                                          // The engine is still very cold... chillax!
+#define dieselTank 69                                       // Change this if you have messed with the original tank capacity.
+                                                            // Defender TD4 2,4l 110 has 73 liters tank. (see manual; section "mainenance")
+                                                            // (Defender TD4 2,4l 90 has 57 liters tank.)
+                                                            // "a minimum of 4 litres will be required to restart the engine" -> 73-4=69 !
+>>>>>>> refs/remotes/origin/master
                                                             // "(warning Light) Illuminates when the fuel remaining in the tank drops to a minimum of 9 litres."
                                                             // "Once the fuel level has dropped to the point where the range is approximately 80 km the low fuel warning indicator will illuminate."
 // misc variables
@@ -88,9 +118,15 @@ int watMin = 50;                                            // interpreted cooli
 int rpmMin = 1000;                                          // interpreted engine rpm [1/min]
 
 // EEprom misc values (300's)
+<<<<<<< HEAD
 int startCount = 0;                                         // motor ignition counter
 float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
 float litersConsumed = 0;                                   // calculate ml -> liters (liters + ml / 1000)    = consumed fuel since refill
+=======
+int startCount = 0;                                         // motor start counter
+float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
+float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
+>>>>>>> refs/remotes/origin/master
 float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)  = alltime driven km
 float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)    = alltime consumed fuel
 
@@ -183,7 +219,11 @@ void blingbling() {
 
 void EEdelete(char what) {                                  // delete selected values (t=tankstop; s=speeds; w=water temperatures; k=ALL-values)
   if (what == 't') {                                        // tankstop values
+<<<<<<< HEAD
     EEPROM.put(340,10.0);                                   // default value litersConsumed since refill
+=======
+    EEPROM.put(340,10.0);                                   // default value litersTank (consumed)
+>>>>>>> refs/remotes/origin/master
     EEPROM.put(320,10.0);                                   // default value kmTank
     EEPROM.put(260,10.0);                                   // default value avgMinTank
   } else if (what == 'm') {                                 // maximum values
@@ -622,13 +662,18 @@ void showMode4() {                                          // tankstop-screen w
     soundOnOff();
   } else if (keypressed == 'u') {
     lcd.setCursor(0,0);
+<<<<<<< HEAD
     lcd.print("      range     ");
+=======
+    lcd.print("range (distance)");
+>>>>>>> refs/remotes/origin/master
     lcd.setCursor(0,0);
     lcd.write(byte(3));
     lcd.setCursor(0,1);
     lcd.print("   fuel    avg. ");
   } else {
     lcd.setCursor(0,0);
+<<<<<<< HEAD
     lcd.print("     /   km left");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
@@ -659,6 +704,35 @@ void showMode4() {                                          // tankstop-screen w
     
     lcd.setCursor(10,1);                                    // capacity
     if (kmTank != 0) { EE_FLOAT = 100 * litersConsumed / kmTank; } else { EE_FLOAT = 0; } // avg consumption
+=======
+    lcd.print("      km (   km)");
+    lcd.setCursor(0,0);
+    lcd.write(byte(3));
+    lcd.setCursor(0,1);
+    lcd.print("     /  l      l");
+    
+    lcd.setCursor(3,0);
+    if (EE_FLOAT != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / EE_FLOAT; } 
+    else if (litersAll != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / (100 * litersAll / kmAll); }
+    else { EE_FLOAT = 0; }
+    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
+    lcd.print(EE_FLOAT,0);
+    
+    lcd.setCursor(10,0);
+    if (kmTank < 10) { lcd.print("  "); } else
+    if (kmTank < 100) { lcd.print(" "); }
+    lcd.print(kmTank,0);
+
+    lcd.setCursor(3,1);
+    EE_FLOAT = dieselTank - litersTank;
+    if (EE_FLOAT < 9.95) { lcd.print(" "); }
+    lcd.print(EE_FLOAT,0);
+    lcd.setCursor(6,1);
+    lcd.print(dieselTank);
+    
+    lcd.setCursor(10,1);
+    if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
+>>>>>>> refs/remotes/origin/master
     if (EE_FLOAT < 9.95) { lcd.print(" "); }
     lcd.write(byte(2));
     lcd.print(EE_FLOAT,1);

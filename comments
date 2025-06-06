@@ -1,10 +1,5 @@
-- new user-interface / increased comfort (changed display screens)
-- concentrating on the most relevant data
-- most of the code rewritten / rearranged
-- lots of bugfixes
-- automated screen switching on <motor on & off>
-- piezo speaker support on PIN A1 (+) and A2 (-)
-  -> alert sounds if coolant gets too hot (> 100°C)
-- sound can be disabled by pressing down key
-- blinking warning symbols for coolant (still too cold (*) and too hot (!))
-
+ * accelerated bootup
+ * debounce buttons
+ * minor display modifications in mode 1
+ * bugfix tankstop-range occasionally switching to trip-km
+ * display modifications in mode 4 (distance --> full range)

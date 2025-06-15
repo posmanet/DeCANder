@@ -1,5 +1,5 @@
 # DeCANder
-Landrover Defender TD4 / TDCI - Arduino UNO - CAN-bus display/tool (2,4l Machine only; MY 2007-2011)
+Landrover Defender TD4 / TDCI - CAN-bus display/tool with Arduino UNO (2,4l Machine only; MY 2007-2011)
 
 USE THIS CODE ON YOUR OWN RISK!
 

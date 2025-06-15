@@ -2,58 +2,24 @@
  * DeCANder: Landrover Defender TD4 / TDCI 2,4l (2007-2011) - Arduino UNO - CAN-bus display/tool
  * --> The later 2,2l machines / ECUs are NOT supported because they use totally different PIDs.
  * display for additional information from CAN-bus on Land Rover Defenders with the Ford "TD4" / "TDCI" / "duratorq" / "puma" engine
- * Created 2019 by posmanet (Martin) and released on github.com.
+ * Invented in 2019 by posmanet (Martin) and released on github.com.
  * USE THIS CODE ON YOUR OWN RISK!
  */
  
 // constants
-<<<<<<< HEAD
-#define DeCANderVer "2.6"
-/* what's new on 2024-02-25:
- * accelerated bootup
- * debounce buttons
- * minor display modifications in mode 1
- * bugfix tankstop-range occasionally switching to trip-km
- * display modifications in mode 4 (distance --> full range)
-=======
-#define DeCANderVer "2.5"
+#define DeCANderVer "2.7"
 /*
- * bugfix "Starts"
- * corrected dieselTank for my 110 (see comments)
- * activated hot variable and added tooHot variable
- * added hotMillis & tooHotMillis
- * added hotAlert (and a second warning/alert sound)
- * renamed lastMillis & initMillis (big letter M)
- * rpmMaxi --> EEPROM position 140 !!
- * revised showMode5() (show only max values now)
- * set default rpmMax & rpmMaxi = 0
- * revised EEdelete() - added parameter m (max data) (removed s and w)
- * revised EEwrite()
- * erasing all Data is in showMode2() now
- * added character arrow[8] (sum[8] has no longer use)
- * removed variables avgMax & avgMin & avgMinTank (no use)
- * we do not read any min oder max valies from EEprom any more, due to having trip-values in memory
- * revised tankstop-screen
->>>>>>> refs/remotes/origin/master
+ * see GitHub's "comments" for details on this version
  */
 #define modes 5                                             // number of available display modes; 9 MAX for now - see bottom lines
 #define hotAlert 105                                        // We want to alert at this temperature.
 #define hotWarn 100                                         // We want to warn at this temperature.
-<<<<<<< HEAD
                                                             // Defender emergency program kicks in at about 111°C ...?
 #define notWarm 70                                          // The engine is still cold... chillax!
 #define dieselTank 69                                       // Change this if you have messed with the original tank capacity.
                                                             // Defender TD4 2,4l 110 has 73 liters tank. (see manual; section "mainenance")
                                                             // (Defender TD4 2,4l 90 has 57 liters tank.)
-                                                            // "a minimum of 4 litres will be required to restart the engine" -> 73-4 = 69
-=======
-                                                            // Defender emergency program kicks in at 111°C ...?
-#define notWarm 70                                          // The engine is still very cold... chillax!
-#define dieselTank 69                                       // Change this if you have messed with the original tank capacity.
-                                                            // Defender TD4 2,4l 110 has 73 liters tank. (see manual; section "mainenance")
-                                                            // (Defender TD4 2,4l 90 has 57 liters tank.)
                                                             // "a minimum of 4 litres will be required to restart the engine" -> 73-4=69 !
->>>>>>> refs/remotes/origin/master
                                                             // "(warning Light) Illuminates when the fuel remaining in the tank drops to a minimum of 9 litres."
                                                             // "Once the fuel level has dropped to the point where the range is approximately 80 km the low fuel warning indicator will illuminate."
 // misc variables
@@ -61,7 +27,7 @@ int taster = 0;                                             // ADC button value 
 char keypressed = ' ';                                      // indicate some key still pressed and which ("" = no key pressed)
 int warte = 50;                                             // keypress debounce delay
 int mode = 1;                                               // selectable display mode (UP/DOWN keys)
-bool sound = HIGH;                                          // to deactivate sounds
+bool sound = HIGH;                                          // activate/deactivate sounds
 
 // CAN variables
 unsigned char canLen = 0;                                   // CAN
@@ -118,15 +84,10 @@ int watMin = 50;                                            // interpreted cooli
 int rpmMin = 1000;                                          // interpreted engine rpm [1/min]
 
 // EEprom misc values (300's)
-<<<<<<< HEAD
 int startCount = 0;                                         // motor ignition counter
 float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
 float litersConsumed = 0;                                   // calculate ml -> liters (liters + ml / 1000)    = consumed fuel since refill
-=======
-int startCount = 0;                                         // motor start counter
-float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
 float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
->>>>>>> refs/remotes/origin/master
 float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)  = alltime driven km
 float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)    = alltime consumed fuel
 
@@ -219,11 +180,7 @@ void blingbling() {
 
 void EEdelete(char what) {                                  // delete selected values (t=tankstop; s=speeds; w=water temperatures; k=ALL-values)
   if (what == 't') {                                        // tankstop values
-<<<<<<< HEAD
-    EEPROM.put(340,10.0);                                   // default value litersConsumed since refill
-=======
-    EEPROM.put(340,10.0);                                   // default value litersTank (consumed)
->>>>>>> refs/remotes/origin/master
+    EEPROM.put(340,1.0);                                    // default value litersConsumed since refill
     EEPROM.put(320,10.0);                                   // default value kmTank
     EEPROM.put(260,10.0);                                   // default value avgMinTank
   } else if (what == 'm') {                                 // maximum values
@@ -662,18 +619,14 @@ void showMode4() {                                          // tankstop-screen w
     soundOnOff();
   } else if (keypressed == 'u') {
     lcd.setCursor(0,0);
-<<<<<<< HEAD
     lcd.print("      range     ");
-=======
     lcd.print("range (distance)");
->>>>>>> refs/remotes/origin/master
     lcd.setCursor(0,0);
     lcd.write(byte(3));
     lcd.setCursor(0,1);
     lcd.print("   fuel    avg. ");
   } else {
     lcd.setCursor(0,0);
-<<<<<<< HEAD
     lcd.print("     /   km left");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
@@ -704,7 +657,6 @@ void showMode4() {                                          // tankstop-screen w
     
     lcd.setCursor(10,1);                                    // capacity
     if (kmTank != 0) { EE_FLOAT = 100 * litersConsumed / kmTank; } else { EE_FLOAT = 0; } // avg consumption
-=======
     lcd.print("      km (   km)");
     lcd.setCursor(0,0);
     lcd.write(byte(3));
@@ -732,7 +684,6 @@ void showMode4() {                                          // tankstop-screen w
     
     lcd.setCursor(10,1);
     if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
->>>>>>> refs/remotes/origin/master
     if (EE_FLOAT < 9.95) { lcd.print(" "); }
     lcd.write(byte(2));
     lcd.print(EE_FLOAT,1);

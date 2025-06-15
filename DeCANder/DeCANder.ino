@@ -87,7 +87,7 @@ int rpmMin = 1000;                                          // interpreted engin
 int startCount = 0;                                         // motor ignition counter
 float kmTank = 0;                                           // calculate meters -> km,1 (km + meters / 1000)  = driven km
 float litersConsumed = 0;                                   // calculate ml -> liters (liters + ml / 1000)    = consumed fuel since refill
-float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
+//float litersTank = 0;                                       // calculate ml -> liters (liters + ml / 1000)    = consumed fuel
 float kmAll = 0;                                            // calculate meters -> km,1 (km + meters / 1000)  = alltime driven km
 float litersAll = 0;                                        // calculate ml -> liters (liters + ml / 1000)    = alltime consumed fuel
 
@@ -180,8 +180,8 @@ void blingbling() {
 
 void EEdelete(char what) {                                  // delete selected values (t=tankstop; s=speeds; w=water temperatures; k=ALL-values)
   if (what == 't') {                                        // tankstop values
-    EEPROM.put(340,1.0);                                    // default value litersConsumed since refill
-    EEPROM.put(320,10.0);                                   // default value kmTank
+    EEPROM.put(340,0.01);                                   // default value litersConsumed since refill
+    EEPROM.put(320,0.1);                                    // default value kmTank
     EEPROM.put(260,10.0);                                   // default value avgMinTank
   } else if (what == 'm') {                                 // maximum values
     EEPROM.put(120,100);                                    // default value watMax
@@ -632,58 +632,32 @@ void showMode4() {                                          // tankstop-screen w
     lcd.write(byte(3));
     lcd.setCursor(0,1);
     lcd.print("=   /   l      l");
-    
+
+    // litersTank --> litersConsumed here:
     lcd.setCursor(2,0);                                     // range
-    if (kmTank != 0) { EE_FLOAT = 100 * litersConsumed / kmTank; } else { EE_FLOAT = 0; } // calculate avg consumption
+    if (kmTank > 0) { EE_FLOAT = 100 * litersConsumed / kmTank; } else { EE_FLOAT = 0; } // calculate avg consumption
     if (EE_FLOAT != 0) { EE_FLOAT = 100 * (dieselTank - litersConsumed) / EE_FLOAT; } // calculate range
     else if (litersAll != 0) { EE_FLOAT = 100 * (dieselTank - litersConsumed) / (100 * litersAll / kmAll); }
     else { EE_FLOAT = 0; }
     if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
-//    lcd.print(kmTank,0);
     
     lcd.setCursor(6,0);                                    // distance
     EE_FLOAT = kmTank + EE_FLOAT;
-    if (EE_FLOAT < 10) { lcd.print("  "); } else if (EE_FLOAT < 100) { lcd.print(" "); }
+    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
 
-    lcd.setCursor(2,1);                                     // liters in
+    lcd.setCursor(1,1);                                     // liters in
     EE_FLOAT = dieselTank - litersConsumed;
-    if (EE_FLOAT < 9.95) { lcd.print(" "); }
+    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
     lcd.print(EE_FLOAT,0);
+
     lcd.setCursor(5,1);
     if (dieselTank < 10) { lcd.print("  "); } else if (dieselTank < 100) { lcd.print(" "); }
     lcd.print(dieselTank);
     
     lcd.setCursor(10,1);                                    // capacity
     if (kmTank != 0) { EE_FLOAT = 100 * litersConsumed / kmTank; } else { EE_FLOAT = 0; } // avg consumption
-    lcd.print("      km (   km)");
-    lcd.setCursor(0,0);
-    lcd.write(byte(3));
-    lcd.setCursor(0,1);
-    lcd.print("     /  l      l");
-    
-    lcd.setCursor(3,0);
-    if (EE_FLOAT != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / EE_FLOAT; } 
-    else if (litersAll != 0) { EE_FLOAT = 100 * (dieselTank - litersTank) / (100 * litersAll / kmAll); }
-    else { EE_FLOAT = 0; }
-    if (EE_FLOAT < 9.95) { lcd.print("  "); } else if (EE_FLOAT < 99.95) { lcd.print(" "); }
-    lcd.print(EE_FLOAT,0);
-    
-    lcd.setCursor(10,0);
-    if (kmTank < 10) { lcd.print("  "); } else
-    if (kmTank < 100) { lcd.print(" "); }
-    lcd.print(kmTank,0);
-
-    lcd.setCursor(3,1);
-    EE_FLOAT = dieselTank - litersTank;
-    if (EE_FLOAT < 9.95) { lcd.print(" "); }
-    lcd.print(EE_FLOAT,0);
-    lcd.setCursor(6,1);
-    lcd.print(dieselTank);
-    
-    lcd.setCursor(10,1);
-    if (kmTank != 0) { EE_FLOAT = 100 * litersTank / kmTank; } else { EE_FLOAT = 0; }
     if (EE_FLOAT < 9.95) { lcd.print(" "); }
     lcd.write(byte(2));
     lcd.print(EE_FLOAT,1);

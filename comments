@@ -1,4 +1,7 @@
  * 2.7 is a bugfix release
  * removed some weird code parts that suddenly popped up in 2.6 (skip Version 2.6!)
- * EEprom default value litersConsumed (since refill) set from 10,0 to 1,0
+ * removed bugs arount litersTank and litersConsumed variables
+ * EEprom default value litersConsumed (since refill) set from 10,0 to 0.01
+ * EEprom default value kmTank (since refill) set from 10,0 to 0.1
+ * ...this will lead to more realistic values in tankstop-screen after values reset
 
